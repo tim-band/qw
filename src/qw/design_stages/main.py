@@ -150,6 +150,47 @@ class Requirement(DesignBase):
         return len(self.user_need_links()) == 0
 
 
+class Defect(DesignBase):
+    """Defect 'Design stage'."""
+
+    design_stage = DesignStage.DEFECT
+    plural = "defects"
+
+    def __init__(self) -> None:
+        """Please use the from_markdown or from_dict methods instead of using this constructor."""
+        super().__init__()
+        self.remote_item_type = RemoteItemType.ISSUE
+
+    @classmethod
+    def from_issue(cls, issue: Issue) -> Self:
+        """
+        Create defect from issue data.
+
+        :param issue: issue data from remote repository
+        :return: Defect instance
+        """
+        instance = cls()
+
+        instance.title = issue.title
+        instance.internal_id = issue.number
+        instance.description = issue.body
+        return instance
+
+    @classmethod
+    def is_dict_reference(cls, self_dict, from_stage_name):
+        """
+        Identify dicts that refer to self_dict.
+
+        This must be a Design Output that closes this defect.
+        """
+        if from_stage_name == DesignStage.OUTPUT.value:
+            internal_id = self_dict.get("internal_id", None)
+            if internal_id is None:
+                return None
+            return lambda d: internal_id in d.get("closing_issues", [])
+        return None
+
+
 class DesignOutput(DesignBase):
     """Output Design Stage."""
 
@@ -286,9 +327,12 @@ def get_remote_stages(service: Service) -> DesignStages:
         elif "qw-requirement" in issue.labels:
             logger.debug("Requirement #{}", issue.number)
             output_stages.append(Requirement.from_issue(issue))
+        elif "qw-defect" in issue.labels:
+            logger.debug("Defect #{}", issue.number)
+            output_stages.append(Defect.from_issue(issue))
         else:
             logger.debug(
-                "#{} is neither a User Need nor a Requirement",
+                "#{} is not a User Need, Requirement or defect",
                 issue.number,
             )
     for pr in service.pull_requests:
